@@ -442,6 +442,37 @@ interface ApiMessage {
   content: string;
 }
 
+// ── 模型输出清洗 ─────────────────────────────────────────────────
+// 处理各种格式残留：JSON 包装、容器标记、Markdown 多余格式
+
+function cleanModelOutput(raw: string): string {
+  let text = raw;
+
+  // 1. 如果整个输出是 JSON（模型错误地输出了 JSON 包装），提取内容
+  if (text.startsWith('{') && text.includes('"result"')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.result) text = String(parsed.result);
+    } catch { /* 不是 JSON，继续 */ }
+  }
+
+  // 2. 剥离容器输出标记（SECURECLAW_OUTPUT_START / SECURECLAW_OUTPUT_END）
+  text = text.replace(/SECURECLAW_OUTPUT_START\n?/g, '');
+  text = text.replace(/\n?SECURECLAW_OUTPUT_END\n?/g, '');
+
+  // 3. 剥离可能的 JSON 状态包装
+  text = text.replace(/^\{"status"\s*:\s*"success"\s*,\s*"result"\s*:\s*"/i, '');
+  text = text.replace(/"\s*\}\s*$/i, '');
+
+  // 4. 清理转义换行符（\n 字面量→真正的换行）
+  text = text.replace(/\\n/g, '\n');
+
+  // 5. 去除首尾空白
+  text = text.trim();
+
+  return text;
+}
+
 function apiRequest(
   messages: ApiMessage[],
   system: string,
@@ -489,10 +520,24 @@ function apiRequest(
           }
           try {
             const parsed = JSON.parse(data);
+            // 标准 Anthropic 格式：{"content":[{"type":"text","text":"..."}]}
             const textBlock = parsed.content?.find((b: { type: string }) => b.type === 'text');
-            resolve(textBlock?.text || '');
+            if (textBlock?.text) {
+              resolve(cleanModelOutput(textBlock.text));
+            } else if (parsed.result) {
+              // 第三方代理格式：{"status":"success","result":"..."}
+              resolve(cleanModelOutput(String(parsed.result)));
+            } else if (parsed.choices?.[0]?.message?.content) {
+              // OpenAI 兼容格式：{"choices":[{"message":{"content":"..."}}]}
+              resolve(cleanModelOutput(parsed.choices[0].message.content));
+            } else {
+              // 回退：尝试从整个响应中提取文本
+              const fallback = parsed.content?.[0]?.text || parsed.text || parsed.message || '';
+              resolve(cleanModelOutput(String(fallback)));
+            }
           } catch {
-            reject(new Error(`Failed to parse API response: ${data.slice(0, 200)}`));
+            // 非 JSON 响应 — 直接当作文本处理
+            resolve(cleanModelOutput(data));
           }
         });
       },
@@ -548,8 +593,9 @@ async function runWithTools(
     const { toolCalls, cleanText } = extractToolCalls(responseText);
 
     if (toolCalls.length === 0) {
-      // 无工具调用 — 返回最终文本
-      return { output: cleanText || responseText || '(empty response)', toolCallCount };
+      // 无工具调用 — 返回最终文本（二次清洗确保干净）
+      const finalOutput = cleanModelOutput(cleanText || responseText || '');
+      return { output: finalOutput || '(empty response)', toolCallCount };
     }
 
     // 将模型原始响应加入历史

@@ -141,15 +141,34 @@ export function createSessionRunner(
         });
       }
 
-      // Step 7: 发送响应
+      // Step 7: 发送响应（清洗输出中的标记和 JSON 残留）
       if (result.success && result.output) {
-        const group = db.getGroup(task.groupId);
-        await sendMessage({
-          groupId: task.groupId,
-          content: result.output,
-          replyToId: task.sourceMessageId,
-          channelType: group?.channel_type ?? 'unknown',
-        });
+        let content = result.output;
+        // 安全网：剥离容器输出标记和 JSON 包装
+        content = content.replace(/SECURECLAW_OUTPUT_START\n?/g, '');
+        content = content.replace(/\n?SECURECLAW_OUTPUT_END\n?/g, '');
+        content = content.replace(/\\n/g, '\n');
+        // 检测并提取 JSON 包装
+        if (content.startsWith('{') && content.includes('"result"')) {
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed.result) content = String(parsed.result)
+              .replace(/SECURECLAW_OUTPUT_START\n?/g, '')
+              .replace(/\n?SECURECLAW_OUTPUT_END\n?/g, '')
+              .replace(/\\n/g, '\n');
+          } catch { /* 不是 JSON */ }
+        }
+        content = content.trim();
+
+        if (content) {
+          const group = db.getGroup(task.groupId);
+          await sendMessage({
+            groupId: task.groupId,
+            content,
+            replyToId: task.sourceMessageId,
+            channelType: group?.channel_type ?? 'unknown',
+          });
+        }
       }
 
       // Step 8: 更新会话状态
