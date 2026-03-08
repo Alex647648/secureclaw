@@ -148,7 +148,8 @@ function httpToolRequest(
   });
 }
 
-function executeTool(
+/** @internal 导出用于单元测试 */
+export function executeTool(
   name: string,
   input: Record<string, unknown>,
   homeDir: string,
@@ -410,7 +411,8 @@ interface ParsedToolCall {
   input: Record<string, unknown>;
 }
 
-function extractToolCalls(text: string): { toolCalls: ParsedToolCall[]; cleanText: string } {
+/** @internal 导出用于单元测试 */
+export function extractToolCalls(text: string): { toolCalls: ParsedToolCall[]; cleanText: string } {
   const toolCalls: ParsedToolCall[] = [];
   const toolCallRegex = /<tool_call>\s*(\{[\s\S]*?\})\s*<\/tool_call>/g;
 
@@ -445,7 +447,8 @@ interface ApiMessage {
 // ── 模型输出清洗 ─────────────────────────────────────────────────
 // 处理各种格式残留：JSON 包装、容器标记、Markdown 多余格式
 
-function cleanModelOutput(raw: string): string {
+/** @internal 导出用于单元测试 */
+export function cleanModelOutput(raw: string): string {
   let text = raw;
 
   // 1. 如果整个输出是 JSON（模型错误地输出了 JSON 包装），提取内容
