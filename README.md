@@ -110,7 +110,7 @@ The "Claw" ecosystem has grown rapidly. Here is how SecureClaw compares with oth
 ### 1. Clone and install
 
 ```bash
-git clone <repo-url> secureclaw && cd secureclaw
+git clone https://github.com/Alex647648/secureclaw.git && cd secureclaw
 bash setup.sh
 ```
 

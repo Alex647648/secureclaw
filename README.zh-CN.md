@@ -110,7 +110,7 @@ SecureClaw 是**企业级 AI Agent 安全框架**。它将来自 WhatsApp、Tele
 ### 1. 克隆并安装
 
 ```bash
-git clone <repo-url> secureclaw && cd secureclaw
+git clone https://github.com/Alex647648/secureclaw.git && cd secureclaw
 bash setup.sh
 ```
 
