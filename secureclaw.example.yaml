@@ -1,0 +1,46 @@
+# secureclaw.yaml（不提交到 git）
+
+app:
+  name: "SecureClaw"
+  trigger_word: "@SecureClaw"  # 触发词，空字符串表示响应所有消息
+  timezone: "Asia/Shanghai"
+
+bootstrap:                    # 数据库非空后此节被忽略
+  admin_group_id: "main"      # 内部 groupId，必须满足 SAFE_ID_PATTERN
+  admin_channel_id: ""        # WhatsApp group JID（如 120363xxx@g.us）
+  admin_sender_ids:           # 这些 WhatsApp 号码获得 ADMIN 权限
+    - ""
+
+container:
+  runtime: "apple"            # "apple" | "docker"
+  image: "secureclaw-agent:latest"
+  timeout_ms: 1800000         # 30 分钟，超时后 kill 容器
+  max_concurrent: 5           # 全局最大并发容器数
+
+security:
+  max_injection_score: 0.75   # 超过此分数的消息被拦截
+  credential_proxy:
+    socket_dir: "/tmp/secureclaw-creds"
+    max_requests_per_session: 3  # 每 session 最多发放 3 次 API Key
+
+channels:
+  whatsapp:
+    enabled: true
+    auth_dir: "scdata/whatsapp-auth"
+  telegram:
+    enabled: false
+    bot_token: ""              # 或从 TELEGRAM_BOT_TOKEN 环境变量读取
+  slack:
+    enabled: false
+    bot_token: ""              # 或从 SLACK_BOT_TOKEN 环境变量读取
+    app_token: ""              # 或从 SLACK_APP_TOKEN 环境变量读取
+  discord:
+    enabled: false
+    bot_token: ""              # 或从 DISCORD_BOT_TOKEN 环境变量读取
+
+db:
+  path: "scdata/secureclaw.db"
+
+logging:
+  level: "info"
+  audit_file: "scdata/audit.log"

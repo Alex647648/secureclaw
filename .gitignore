@@ -1,0 +1,14 @@
+node_modules/
+dist/
+scdata/
+groups/
+secureclaw.yaml
+secureclaw.env
+*.db
+*.db-wal
+*.db-shm
+*.log
+logs/
+/tmp/secureclaw-creds/
+*.sock
+data/
