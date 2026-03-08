@@ -1,146 +1,90 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- 盾牌身体渐变 -->
-    <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#7c3aed"/>
-      <stop offset="50%" style="stop-color:#6d28d9"/>
-      <stop offset="100%" style="stop-color:#4c1d95"/>
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#16213e"/>
     </linearGradient>
-    <!-- 钳子渐变 -->
-    <linearGradient id="clawL" x1="100%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#a78bfa"/>
-      <stop offset="100%" style="stop-color:#7c3aed"/>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e94560"/>
+      <stop offset="100%" stop-color="#c23152"/>
     </linearGradient>
-    <linearGradient id="clawR" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#a78bfa"/>
-      <stop offset="100%" style="stop-color:#7c3aed"/>
+    <linearGradient id="g3" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0f3460"/>
+      <stop offset="100%" stop-color="#533483"/>
     </linearGradient>
-    <!-- 腿部渐变 -->
-    <linearGradient id="legGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" style="stop-color:#8b5cf6"/>
-      <stop offset="100%" style="stop-color:#5b21b6"/>
-    </linearGradient>
-    <!-- 眼睛发光 -->
-    <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" style="stop-color:#67e8f9"/>
-      <stop offset="60%" style="stop-color:#22d3ee"/>
-      <stop offset="100%" style="stop-color:#0891b2"/>
-    </radialGradient>
-    <!-- 盾牌花纹高光 -->
-    <linearGradient id="shieldHL" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#c4b5fd" stop-opacity="0.4"/>
-      <stop offset="100%" style="stop-color:#c4b5fd" stop-opacity="0"/>
-    </linearGradient>
-    <!-- 能量核心 -->
-    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" style="stop-color:#a5f3fc"/>
-      <stop offset="40%" style="stop-color:#22d3ee" stop-opacity="0.8"/>
-      <stop offset="100%" style="stop-color:#0e7490" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <filter id="softShadow">
-      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#1e1b4b" flood-opacity="0.4"/>
-    </filter>
+    <clipPath id="shieldClip">
+      <path d="M256 48 L432 128 L432 304 Q432 432 256 480 Q80 432 80 304 L80 128 Z"/>
+    </clipPath>
   </defs>
 
-  <!-- === 左钳臂 === -->
-  <g>
-    <!-- 左大臂 -->
-    <path d="M148 210 C120 190, 68 175, 42 155 C28 145, 18 128, 25 115 C32 102, 50 100, 62 108"
-          fill="url(#clawL)" stroke="#5b21b6" stroke-width="2"/>
-    <!-- 左钳 上瓣 -->
-    <path d="M62 108 C48 88, 22 62, 12 48 C6 38, 10 26, 22 24 C34 22, 46 32, 52 46 C58 60, 58 80, 62 108"
-          fill="#a78bfa" stroke="#5b21b6" stroke-width="2"/>
-    <!-- 左钳 下瓣 -->
-    <path d="M25 115 C10 120, -12 130, -18 142 C-22 150, -16 162, -4 160 C8 158, 22 144, 36 132 C44 126, 32 118, 25 115"
-          fill="#8b5cf6" stroke="#5b21b6" stroke-width="2"/>
-    <!-- 钳内齿 -->
-    <circle cx="38" cy="78" r="4" fill="#ddd6fe"/>
-    <circle cx="28" cy="96" r="3" fill="#ddd6fe"/>
-    <circle cx="14" cy="126" r="3" fill="#ddd6fe"/>
+  <!-- Background circle — Swiss precision -->
+  <circle cx="256" cy="256" r="248" fill="url(#g1)"/>
+
+  <!-- Grid lines — Swiss design backbone (subtle) -->
+  <g stroke="#ffffff" stroke-width="0.5" opacity="0.04">
+    <line x1="128" y1="48" x2="128" y2="480"/>
+    <line x1="256" y1="48" x2="256" y2="480"/>
+    <line x1="384" y1="48" x2="384" y2="480"/>
+    <line x1="48" y1="176" x2="480" y2="176"/>
+    <line x1="48" y1="304" x2="480" y2="304"/>
   </g>
 
-  <!-- === 右钳臂 === -->
-  <g>
-    <!-- 右大臂 -->
-    <path d="M364 210 C392 190, 444 175, 470 155 C484 145, 494 128, 487 115 C480 102, 462 100, 450 108"
-          fill="url(#clawR)" stroke="#5b21b6" stroke-width="2"/>
-    <!-- 右钳 上瓣 -->
-    <path d="M450 108 C464 88, 490 62, 500 48 C506 38, 502 26, 490 24 C478 22, 466 32, 460 46 C454 60, 454 80, 450 108"
-          fill="#a78bfa" stroke="#5b21b6" stroke-width="2"/>
-    <!-- 右钳 下瓣 -->
-    <path d="M487 115 C502 120, 524 130, 530 142 C534 150, 528 162, 516 160 C504 158, 490 144, 476 132 C468 126, 480 118, 487 115"
-          fill="#8b5cf6" stroke="#5b21b6" stroke-width="2"/>
-    <!-- 钳内齿 -->
-    <circle cx="474" cy="78" r="4" fill="#ddd6fe"/>
-    <circle cx="484" cy="96" r="3" fill="#ddd6fe"/>
-    <circle cx="498" cy="126" r="3" fill="#ddd6fe"/>
+  <!-- Shield form — geometric, deconstructed -->
+  <g clip-path="url(#shieldClip)">
+    <!-- Main shield body -->
+    <path d="M256 48 L432 128 L432 304 Q432 432 256 480 Q80 432 80 304 L80 128 Z"
+          fill="url(#g3)" opacity="0.9"/>
+
+    <!-- Postmodern diagonal slice -->
+    <polygon points="80,128 432,304 432,432 80,432" fill="#0f3460" opacity="0.5"/>
+
+    <!-- Horizontal bands — Swiss rhythm -->
+    <rect x="80" y="176" width="352" height="3" fill="#e94560" opacity="0.7"/>
+    <rect x="80" y="256" width="352" height="2" fill="#ffffff" opacity="0.1"/>
+    <rect x="80" y="336" width="352" height="3" fill="#e94560" opacity="0.4"/>
   </g>
 
-  <!-- === 腿（左 3 条）=== -->
-  <g fill="url(#legGrad)" stroke="#4c1d95" stroke-width="2" stroke-linecap="round">
-    <path d="M150 290 C115 300, 75 315, 55 340 C48 350, 52 360, 60 358 C72 354, 90 335, 120 310"/>
-    <path d="M140 330 C108 348, 72 370, 56 398 C50 410, 56 418, 65 414 C78 408, 96 385, 118 355"/>
-    <path d="M148 368 C122 392, 94 420, 86 448 C83 460, 90 466, 98 460 C110 450, 120 425, 135 395"/>
+  <!-- Shield stroke -->
+  <path d="M256 48 L432 128 L432 304 Q432 432 256 480 Q80 432 80 304 L80 128 Z"
+        fill="none" stroke="#e94560" stroke-width="3" opacity="0.8"/>
+
+  <!-- Claw marks — 3 diagonal slashes, postmodern gesture -->
+  <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M168 160 L208 340 L200 380"
+          stroke="#e94560" stroke-width="28" opacity="0.9"/>
+    <path d="M168 160 L208 340 L200 380"
+          stroke="#ff6b81" stroke-width="16" opacity="0.4"/>
+
+    <path d="M240 140 L264 350 L258 396"
+          stroke="#e94560" stroke-width="28" opacity="0.9"/>
+    <path d="M240 140 L264 350 L258 396"
+          stroke="#ff6b81" stroke-width="16" opacity="0.4"/>
+
+    <path d="M312 160 L320 340 L316 380"
+          stroke="#e94560" stroke-width="28" opacity="0.9"/>
+    <path d="M312 160 L320 340 L316 380"
+          stroke="#ff6b81" stroke-width="16" opacity="0.4"/>
   </g>
 
-  <!-- === 腿（右 3 条）=== -->
-  <g fill="url(#legGrad)" stroke="#4c1d95" stroke-width="2" stroke-linecap="round">
-    <path d="M362 290 C397 300, 437 315, 457 340 C464 350, 460 360, 452 358 C440 354, 422 335, 392 310"/>
-    <path d="M372 330 C404 348, 440 370, 456 398 C462 410, 456 418, 447 414 C434 408, 416 385, 394 355"/>
-    <path d="M364 368 C390 392, 418 420, 426 448 C429 460, 422 466, 414 460 C402 450, 392 425, 377 395"/>
+  <!-- Lock keyhole — centered, geometric -->
+  <g transform="translate(256, 290)">
+    <circle cx="0" cy="-16" r="20" fill="#1a1a2e" stroke="#ffffff" stroke-width="2.5" opacity="0.9"/>
+    <rect x="-8" y="-4" width="16" height="32" rx="4" fill="#1a1a2e" stroke="#ffffff" stroke-width="2.5" opacity="0.9"/>
+    <!-- Inner keyhole glow -->
+    <circle cx="0" cy="-16" r="10" fill="none" stroke="#e94560" stroke-width="1.5" opacity="0.6"/>
   </g>
 
-  <!-- === 盾牌身体 === -->
-  <path d="M256 120 L410 178 C410 178 425 330 256 460 C87 330 102 178 102 178 Z"
-        fill="url(#bodyGrad)" filter="url(#softShadow)" stroke="#4c1d95" stroke-width="3"/>
+  <!-- Corner accent — postmodern asymmetry -->
+  <rect x="72" y="56" width="40" height="6" rx="3" fill="#e94560" opacity="0.8"/>
+  <rect x="72" y="56" width="6" height="40" rx="3" fill="#e94560" opacity="0.8"/>
 
-  <!-- 盾面高光 -->
-  <path d="M256 140 L390 192 C390 192 380 220 256 160 Z"
-        fill="url(#shieldHL)"/>
+  <rect x="400" y="456" width="40" height="6" rx="3" fill="#533483" opacity="0.6"/>
+  <rect x="434" y="422" width="6" height="40" rx="3" fill="#533483" opacity="0.6"/>
 
-  <!-- 盾面装甲纹 — 中央脊线 -->
-  <line x1="256" y1="155" x2="256" y2="420" stroke="#5b21b6" stroke-width="2" opacity="0.5"/>
-  <!-- 横向纹 -->
-  <path d="M150 240 Q256 260, 362 240" fill="none" stroke="#5b21b6" stroke-width="1.5" opacity="0.4"/>
-  <path d="M140 310 Q256 340, 372 310" fill="none" stroke="#5b21b6" stroke-width="1.5" opacity="0.4"/>
-
-  <!-- === 眼睛 === -->
-  <!-- 左眼 -->
-  <ellipse cx="210" cy="210" rx="28" ry="24" fill="#1e1b4b"/>
-  <ellipse cx="210" cy="210" rx="22" ry="18" fill="url(#eyeGlow)" filter="url(#glow)"/>
-  <ellipse cx="214" cy="206" rx="8" ry="6" fill="#ecfeff" opacity="0.9"/>
-  <ellipse cx="204" cy="214" rx="4" ry="3" fill="#ecfeff" opacity="0.5"/>
-
-  <!-- 右眼 -->
-  <ellipse cx="302" cy="210" rx="28" ry="24" fill="#1e1b4b"/>
-  <ellipse cx="302" cy="210" rx="22" ry="18" fill="url(#eyeGlow)" filter="url(#glow)"/>
-  <ellipse cx="306" cy="206" rx="8" ry="6" fill="#ecfeff" opacity="0.9"/>
-  <ellipse cx="296" cy="214" rx="4" ry="3" fill="#ecfeff" opacity="0.5"/>
-
-  <!-- 眉骨 -->
-  <path d="M180 190 Q210 178, 235 188" fill="none" stroke="#3b0764" stroke-width="4" stroke-linecap="round"/>
-  <path d="M277 188 Q302 178, 332 190" fill="none" stroke="#3b0764" stroke-width="4" stroke-linecap="round"/>
-
-  <!-- === 胸口能量核心（锁芯）=== -->
-  <circle cx="256" cy="330" r="36" fill="#0f172a" stroke="#5b21b6" stroke-width="2"/>
-  <circle cx="256" cy="330" r="30" fill="url(#coreGlow)" filter="url(#glow)"/>
-  <!-- 锁孔 -->
-  <circle cx="256" cy="322" r="10" fill="#0c4a6e" stroke="#22d3ee" stroke-width="1.5"/>
-  <path d="M250 328 L250 348 Q250 354, 256 354 Q262 354, 262 348 L262 328"
-        fill="#0c4a6e" stroke="#22d3ee" stroke-width="1.5"/>
-  <!-- 核心十字准星 -->
-  <line x1="256" y1="300" x2="256" y2="306" stroke="#67e8f9" stroke-width="1" opacity="0.6"/>
-  <line x1="256" y1="354" x2="256" y2="360" stroke="#67e8f9" stroke-width="1" opacity="0.6"/>
-  <line x1="226" y1="330" x2="232" y2="330" stroke="#67e8f9" stroke-width="1" opacity="0.6"/>
-  <line x1="280" y1="330" x2="286" y2="330" stroke="#67e8f9" stroke-width="1" opacity="0.6"/>
-
-  <!-- === 头顶天线 === -->
-  <line x1="230" y1="140" x2="215" y2="100" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="215" cy="96" r="6" fill="#22d3ee" filter="url(#glow)"/>
-  <line x1="282" y1="140" x2="297" y2="100" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="297" cy="96" r="6" fill="#22d3ee" filter="url(#glow)"/>
+  <!-- Typography — SC monogram, Helvetica-spirit -->
+  <text x="256" y="484" text-anchor="middle"
+        font-family="'Helvetica Neue', Helvetica, Arial, sans-serif"
+        font-size="24" font-weight="700" letter-spacing="12" fill="#ffffff" opacity="0.15">
+    SECURECLAW
+  </text>
 </svg>
