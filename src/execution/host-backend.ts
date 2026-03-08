@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AgentTask, AgentResult, ExecutionPolicy, TaskStatus } from '../core/types';
 import type { ExecutionBackend, CredentialContext } from './interface';
+import type { SecureClawDB } from '../db/db';
 
 // ── 配置 ───────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ export interface HostBackendConfig {
   baseUrl?: string;
   model?: string;
   projectRoot?: string;
+  db?: SecureClawDB;
 }
 
 // ── 活跃请求跟踪 ───────────────────────────────────────────────
@@ -24,6 +26,10 @@ export interface HostBackendConfig {
 const activeRequests = new Map<string, { abort: () => void }>();
 
 // ── 工具描述（嵌入 system prompt）──────────────────────────────
+
+// ── 进度回调类型 ─────────────────────────────────────────────
+
+export type ProgressCallback = (message: string) => Promise<void>;
 
 const TOOL_SYSTEM_PROMPT = `
 You have access to the following tools on the user's local machine. To use a tool, output EXACTLY this format on its own line:
@@ -33,15 +39,34 @@ You have access to the following tools on the user's local machine. To use a too
 </tool_call>
 
 Available tools:
+
+== File Operations ==
 1. list_files(path?: string, show_hidden?: boolean) - List files and directories. path defaults to ~/Desktop if not specified.
 2. read_file(path: string) - Read content of a text file.
 3. write_file(path: string, content: string, append?: boolean) - Write/append to a file.
 4. move_file(source: string, destination: string) - Move or rename a file/directory.
 5. delete_file(path: string) - Delete a file or empty directory.
 6. create_directory(path: string) - Create a directory recursively.
-7. run_command(command: string, cwd?: string) - Execute a shell command.
-8. search_files(pattern: string, directory?: string) - Search for files by name pattern.
-9. save_memory(content: string) - Save persistent memory for this chat. Use to remember role settings, preferences, etc.
+7. search_files(pattern: string, directory?: string) - Search for files by name pattern.
+
+== System ==
+8. run_command(command: string, cwd?: string) - Execute a shell command (30s timeout).
+9. run_applescript(script: string) - Execute AppleScript via osascript. Use for macOS automation: control apps, show dialogs, get system info.
+10. ensure_tool(name: string, install_cmd?: string) - Check if a CLI tool is installed, auto-install if missing (via brew/npm).
+
+== Network ==
+11. http_request(url: string, method?: string, headers?: object, body?: string) - Make an HTTP/HTTPS request. Returns status + body.
+12. web_search(query: string, count?: number) - Search the web. Requires SEARCH_API_KEY env var (Brave Search API).
+
+== Memory ==
+13. save_memory(content: string) - Save persistent file-based memory (CLAUDE.md) for role/persona settings.
+14. remember(key: string, value: string, tags?: string) - Save a structured key-value memory entry to database. Use for facts, preferences, notes.
+15. recall(query: string) - Search structured memories by keyword (matches key, value, or tags).
+16. forget(key: string) - Delete a specific structured memory entry.
+17. list_memories() - List all structured memory entries for this group.
+
+== Interaction ==
+18. ask_confirmation(question: string) - Ask the user a yes/no question and pause. The user's next message will be treated as the answer.
 
 CRITICAL RULES for tool use:
 - When the user asks to perform a file operation (list, organize, create, delete, move files), you MUST use the appropriate tool to ACTUALLY DO IT. Do NOT just describe or list — complete the full task.
@@ -50,6 +75,7 @@ CRITICAL RULES for tool use:
 - After tool results come back, continue with more <tool_call> until the task is fully done. Only give a text summary when all operations are complete.
 - Use ~ for home directory paths (e.g., ~/Desktop).
 - When the user sets your name/role/persona, ALWAYS use save_memory to persist it.
+- Use remember/recall for storing and retrieving specific facts, preferences, project notes, etc. Use save_memory only for role/persona persistence.
 - Be proactive: if the user says "organize", decide a reasonable categorization (by file type: images, documents, code, etc.) and execute it immediately.
 `.trim();
 
@@ -70,13 +96,66 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+// ── 确认式交互状态 ──────────────────────────────────────────────
+
+interface ConfirmationState {
+  question: string;
+  groupId: string;
+  senderId: string;
+}
+
+let pendingConfirmation: ConfirmationState | null = null;
+
+// ── HTTP 请求工具 ────────────────────────────────────────────────
+
+function httpToolRequest(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: string,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const isHttps = parsed.protocol === 'https:';
+    const requestFn = isHttps ? httpsRequest : httpRequest;
+
+    const req = requestFn(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: method.toUpperCase(),
+        headers: {
+          ...headers,
+          ...(body ? { 'Content-Length': String(Buffer.byteLength(body)) } : {}),
+        },
+        timeout: 15_000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+        res.on('end', () => {
+          // 截断过长响应
+          const truncated = data.length > 8000 ? data.slice(0, 8000) + '\n... (truncated)' : data;
+          resolve({ status: res.statusCode ?? 0, body: truncated });
+        });
+      },
+    );
+    req.on('error', (err: Error) => reject(err));
+    req.on('timeout', () => { req.destroy(); reject(new Error('HTTP request timeout (15s)')); });
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
 function executeTool(
   name: string,
   input: Record<string, unknown>,
   homeDir: string,
   projectRoot: string,
   groupId: string,
-): string {
+  db?: SecureClawDB,
+): string | Promise<string> {
   try {
     switch (name) {
       case 'list_files': {
@@ -176,6 +255,144 @@ function executeTool(
         fs.mkdirSync(memoryDir, { recursive: true });
         fs.writeFileSync(memoryPath, content, 'utf8');
         return `Memory saved (${content.length} chars). Will be loaded automatically next time.`;
+      }
+
+      // ── AppleScript 工具 ──────────────────────────────────
+
+      case 'run_applescript': {
+        const script = input.script as string;
+        if (!script) return 'Error: script parameter is required';
+        const output = execSync(`osascript -e ${JSON.stringify(script)}`, {
+          timeout: 15_000,
+          maxBuffer: 512 * 1024,
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        const trimmed = output.trim();
+        return trimmed.length > 4000 ? trimmed.slice(0, 4000) + '\n... (truncated)' : (trimmed || '(no output)');
+      }
+
+      // ── 依赖安装工具 ──────────────────────────────────────
+
+      case 'ensure_tool': {
+        const toolName = input.name as string;
+        if (!toolName) return 'Error: name parameter is required';
+        // 检查是否已安装
+        try {
+          const location = execSync(`which ${toolName}`, { encoding: 'utf8', timeout: 5000 }).trim();
+          return `✅ ${toolName} is already installed at ${location}`;
+        } catch {
+          // 未安装，尝试安装
+        }
+        const installCmd = input.install_cmd as string;
+        if (installCmd) {
+          try {
+            execSync(installCmd, { encoding: 'utf8', timeout: 120_000, stdio: ['pipe', 'pipe', 'pipe'] });
+            return `✅ Installed ${toolName} via: ${installCmd}`;
+          } catch (e: any) {
+            return `❌ Failed to install ${toolName}: ${e.message}`;
+          }
+        }
+        // 尝试 brew
+        try {
+          execSync(`brew install ${toolName}`, { encoding: 'utf8', timeout: 120_000, stdio: ['pipe', 'pipe', 'pipe'] });
+          return `✅ Installed ${toolName} via brew`;
+        } catch {
+          // brew 失败，尝试 npm
+        }
+        try {
+          execSync(`npm install -g ${toolName}`, { encoding: 'utf8', timeout: 60_000, stdio: ['pipe', 'pipe', 'pipe'] });
+          return `✅ Installed ${toolName} via npm`;
+        } catch (e: any) {
+          return `❌ Could not install ${toolName}. Try specifying install_cmd parameter.`;
+        }
+      }
+
+      // ── HTTP 请求工具 ─────────────────────────────────────
+
+      case 'http_request': {
+        const url = input.url as string;
+        if (!url) return 'Error: url parameter is required';
+        const method = (input.method as string) || 'GET';
+        const headers = (input.headers as Record<string, string>) || {};
+        const body = input.body as string | undefined;
+        return httpToolRequest(url, method, headers, body).then(
+          (res) => `HTTP ${res.status}\n${res.body}`,
+          (err) => `Error: ${err.message}`,
+        );
+      }
+
+      // ── 网页搜索工具 ──────────────────────────────────────
+
+      case 'web_search': {
+        const query = input.query as string;
+        if (!query) return 'Error: query parameter is required';
+        const apiKey = process.env.SEARCH_API_KEY;
+        if (!apiKey) return 'Error: SEARCH_API_KEY environment variable not set. Set it to a Brave Search API key.';
+        const count = Math.min((input.count as number) || 5, 10);
+        const searchUrl = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`;
+        return httpToolRequest(searchUrl, 'GET', {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip',
+          'X-Subscription-Token': apiKey,
+        }).then(
+          (res) => {
+            try {
+              const data = JSON.parse(res.body);
+              const results = (data.web?.results || []) as Array<{ title: string; url: string; description: string }>;
+              if (results.length === 0) return 'No results found.';
+              return results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.description}`).join('\n\n');
+            } catch {
+              return `Search returned status ${res.status}: ${res.body.slice(0, 500)}`;
+            }
+          },
+          (err) => `Error: ${err.message}`,
+        );
+      }
+
+      // ── 结构化记忆工具 ────────────────────────────────────
+
+      case 'remember': {
+        const key = input.key as string;
+        const value = input.value as string;
+        if (!key || !value) return 'Error: key and value parameters are required';
+        if (!db) return 'Error: database not available';
+        const tags = (input.tags as string) || '';
+        db.saveMemoryEntry(groupId, key, value, tags);
+        return `✅ Remembered "${key}" = "${value.slice(0, 100)}${value.length > 100 ? '...' : ''}"${tags ? ` [tags: ${tags}]` : ''}`;
+      }
+
+      case 'recall': {
+        const query = input.query as string;
+        if (!query) return 'Error: query parameter is required';
+        if (!db) return 'Error: database not available';
+        const results = db.searchMemory(groupId, query);
+        if (results.length === 0) return `No memories found matching "${query}"`;
+        return results.map(r => `• ${r.key}: ${r.value}${r.tags ? ` [${r.tags}]` : ''}`).join('\n');
+      }
+
+      case 'forget': {
+        const key = input.key as string;
+        if (!key) return 'Error: key parameter is required';
+        if (!db) return 'Error: database not available';
+        const deleted = db.deleteMemoryEntry(groupId, key);
+        return deleted ? `🗑️ Forgot "${key}"` : `No memory found with key "${key}"`;
+      }
+
+      case 'list_memories': {
+        if (!db) return 'Error: database not available';
+        const all = db.listMemory(groupId);
+        if (all.length === 0) return 'No memories stored yet.';
+        return all.map(r => `• ${r.key}: ${r.value}${r.tags ? ` [${r.tags}]` : ''}`).join('\n');
+      }
+
+      // ── 确认式交互工具 ────────────────────────────────────
+
+      case 'ask_confirmation': {
+        const question = input.question as string;
+        if (!question) return 'Error: question parameter is required';
+        pendingConfirmation = { question, groupId, senderId: '' };
+        return `CONFIRMATION_REQUESTED: ${question}`;
       }
 
       default:
@@ -301,7 +518,7 @@ function apiRequest(
 
 // ── 多轮工具调用循环 ────────────────────────────────────────────
 
-const MAX_TOOL_TURNS = 10;
+const MAX_TOOL_TURNS = 15;
 
 async function runWithTools(
   prompt: string,
@@ -313,12 +530,15 @@ async function runWithTools(
   homeDir: string,
   projectRoot: string,
   groupId: string,
-): Promise<{ output: string; toolCallCount: number }> {
+  onProgress?: ProgressCallback,
+  db?: SecureClawDB,
+): Promise<{ output: string; toolCallCount: number; confirmationQuestion?: string }> {
   const messages: ApiMessage[] = [
     { role: 'user', content: prompt },
   ];
 
   let toolCallCount = 0;
+  pendingConfirmation = null;
 
   for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
     const responseText = await apiRequest(
@@ -339,10 +559,27 @@ async function runWithTools(
     const results: string[] = [];
     for (const tc of toolCalls) {
       console.error(`[host-backend] Tool call #${toolCallCount + 1}: ${tc.name}(${JSON.stringify(tc.input).slice(0, 200)})`);
-      const result = executeTool(tc.name, tc.input, homeDir, projectRoot, groupId);
+      const rawResult = executeTool(tc.name, tc.input, homeDir, projectRoot, groupId, db);
+      // 支持异步工具（http_request, web_search）
+      const result = rawResult instanceof Promise ? await rawResult : rawResult;
       toolCallCount++;
       console.error(`[host-backend] Tool result: ${result.slice(0, 300)}${result.length > 300 ? '...' : ''}`);
       results.push(`[${tc.name}] result:\n${result}`);
+
+      // 检查确认式交互
+      const confirm = pendingConfirmation as ConfirmationState | null;
+      if (confirm) {
+        return {
+          output: cleanText || '',
+          toolCallCount,
+          confirmationQuestion: confirm.question,
+        };
+      }
+    }
+
+    // 每 5 次工具调用发送进度通知
+    if (onProgress && toolCallCount % 5 === 0 && toolCallCount > 0) {
+      await onProgress(`⏳ 已执行 ${toolCallCount} 个操作，继续处理中...`);
     }
 
     // 把工具执行结果作为 user 消息反馈（鼓励继续操作）
@@ -357,28 +594,40 @@ async function runWithTools(
 
 // ── ExecutionBackend 实现 ──────────────────────────────────────
 
-export function createHostBackend(config: HostBackendConfig): ExecutionBackend {
+export interface HostBackendWithProgress extends ExecutionBackend {
+  /** 设置进度回调（通过通道发送中间状态） */
+  setProgressCallback(cb: ProgressCallback): void;
+}
+
+export function createHostBackend(config: HostBackendConfig): HostBackendWithProgress {
   const { apiKey } = config;
   const baseUrl = config.baseUrl || process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
   const model = config.model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
   const homeDir = process.env.HOME || '/tmp';
   const projectRoot = config.projectRoot || process.cwd();
+  const db = config.db;
+  let progressCallback: ProgressCallback | undefined;
 
   return {
+    setProgressCallback(cb: ProgressCallback) {
+      progressCallback = cb;
+    },
+
     async run(task: AgentTask, policy: ExecutionPolicy, _credentials?: CredentialContext): Promise<AgentResult> {
       const startTime = Date.now();
       console.error(`[host-backend] Starting: model=${model}, group=${task.groupId}, prompt=${task.prompt.length} chars`);
 
       try {
-        const { output, toolCallCount } = await runWithTools(
+        const { output, toolCallCount, confirmationQuestion } = await runWithTools(
           task.prompt, apiKey, baseUrl, model, policy.timeoutMs,
           task.taskId, homeDir, projectRoot, task.groupId,
+          progressCallback, db,
         );
 
         const durationMs = Date.now() - startTime;
         console.error(`[host-backend] Done: ${durationMs}ms, output=${output.length} chars, tools=${toolCallCount}`);
 
-        return {
+        const result: AgentResult = {
           taskId: task.taskId,
           sessionId: task.sessionId,
           success: true,
@@ -386,6 +635,13 @@ export function createHostBackend(config: HostBackendConfig): ExecutionBackend {
           durationMs,
           toolCallCount,
         };
+
+        // 如果有确认请求，在 output 前附加提问
+        if (confirmationQuestion) {
+          result.output = `${confirmationQuestion}\n\n(请回复以继续)`;
+        }
+
+        return result;
       } catch (err: any) {
         const durationMs = Date.now() - startTime;
         console.error(`[host-backend] Failed: ${durationMs}ms, error=${err.message}`);
@@ -415,3 +671,4 @@ export function createHostBackend(config: HostBackendConfig): ExecutionBackend {
     },
   };
 }
+

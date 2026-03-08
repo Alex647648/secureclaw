@@ -84,7 +84,17 @@ export function createMessagePipeline(
         // 设置 groupId（normalizer 输出的 channelId 需要映射到内部 groupId）
         normalized.groupId = group.id;
 
-        // Step 2.5: 管理员命令拦截
+        // Step 2.5a: 检查待确认交互（确认式交互的回复）
+        const pendingConfirm = db.getPendingConfirmation(group.id, normalized.senderId);
+        if (pendingConfirm) {
+          // 将用户回复作为确认结果处理
+          db.deletePendingConfirmation(pendingConfirm.id);
+          // 把确认结果追加到原始上下文中，作为新任务重新入队
+          const confirmContent = `[User confirmed: "${normalized.content}" in response to: "${pendingConfirm.question}"]\n\nOriginal context: ${pendingConfirm.context}\n\nUser's confirmation response: ${normalized.content}\n\nContinue the task based on the user's response.`;
+          normalized.content = confirmContent;
+        }
+
+        // Step 2.5b: 管理员命令拦截
         if (config.adminHandler && isAdminCommand(normalized.content)) {
           // 检查发送者是否具有显式 ADMIN 信任级别
           // 安全关键：必须有显式的 per-member ADMIN 信任，不允许回退到群组默认级别

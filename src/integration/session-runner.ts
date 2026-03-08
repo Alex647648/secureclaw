@@ -11,6 +11,7 @@ import { validateTask } from '../security/sandbox-validator';
 import { validateMounts } from '../security/mount-controller';
 import { createSessionDir, cleanSessionDir } from '../memory/session-memory';
 import { generateId } from '../core/utils';
+import type { HostBackendWithProgress } from '../execution/host-backend';
 
 // ── 配置 ───────────────────────────────────────────────────────
 
@@ -104,7 +105,22 @@ export function createSessionRunner(
       let result;
 
       if (useHost) {
-        // ── ADMIN 宿主执行：直接调用 Claude CLI，无需凭证代理 ──
+        // ── ADMIN 宿主执行：直接调用 Claude API，无需凭证代理 ──
+        // 设置进度回调：通过通道发送中间状态
+        const hb = hostBackend as HostBackendWithProgress;
+        if (hb.setProgressCallback) {
+          const group = db.getGroup(task.groupId);
+          hb.setProgressCallback(async (msg: string) => {
+            try {
+              await sendMessage({
+                groupId: task.groupId,
+                content: msg,
+                channelType: group?.channel_type ?? 'unknown',
+              });
+            } catch { /* 进度推送失败不影响主流程 */ }
+          });
+        }
+
         result = await hostBackend.run(task, policy);
       } else {
         // ── 容器执行：凭证代理 + 挂载验证 + Docker 容器 ──
@@ -208,3 +224,4 @@ export function createSessionRunner(
     }
   };
 }
+

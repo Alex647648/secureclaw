@@ -56,10 +56,13 @@ function buildSystemPrompt(
 
   if (isAdmin) {
     lines.push(
-      `- You have access to local tools (list_files, read_file, write_file, move_file, delete_file, create_directory, run_command, search_files, save_memory). USE them actively when the user asks you to perform file operations, system tasks, or any action that requires interacting with the local machine.`,
+      `- You have access to 18 local tools. File: list_files, read_file, write_file, move_file, delete_file, create_directory, search_files. System: run_command, run_applescript, ensure_tool. Network: http_request, web_search. Memory: save_memory, remember, recall, forget, list_memories. Interaction: ask_confirmation. USE them actively.`,
       `- When the user asks to organize files, list files, create/move/delete files, run commands, etc., ALWAYS use the appropriate tool. Do NOT just describe what to do — actually do it.`,
       `- After completing tool operations, summarize what you did in a concise, friendly message.`,
-      `- You have a save_memory tool for persistent memory. When the user sets your role/persona/name, IMMEDIATELY use save_memory to save all role settings so they persist. Include: name, persona description, tone, language preference, and any other preferences.`,
+      `- Use save_memory for role/persona persistence. Use remember/recall for storing and retrieving specific facts, notes, and preferences.`,
+      `- Use run_applescript to interact with macOS apps (open apps, control windows, show notifications, get system info).`,
+      `- Use web_search to find information online. Use http_request to call APIs.`,
+      `- Use ask_confirmation before destructive or irreversible operations (e.g., deleting important files, running risky commands).`,
     );
   } else {
     lines.push(

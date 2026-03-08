@@ -202,6 +202,7 @@ async function main(): Promise<void> {
     apiKey: config.anthropicApiKey,
     baseUrl: process.env.ANTHROPIC_BASE_URL,
     projectRoot: process.cwd(),
+    db,
   });
   log.info('Host execution backend created for ADMIN tasks');
 

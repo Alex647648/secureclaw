@@ -52,22 +52,32 @@ function makeMsg(overrides?: Partial<TrustedMessage>): TrustedMessage {
 // ── buildSystemPrompt ─────────────────────────────────────────
 
 describe('buildSystemPrompt', () => {
-  it('should include group and sender info', () => {
+  it('should include sender info and language rules', () => {
     const prompt = buildSystemPrompt('my-group', TrustLevel.TRUSTED, 'Alice');
-    expect(prompt).toContain('my-group');
     expect(prompt).toContain('Alice');
-    expect(prompt).toContain('TRUSTED');
+    expect(prompt).toContain('Sender: Alice');
+    expect(prompt).toContain('CRITICAL RULES');
   });
 
-  it('should include ADMIN trust level name', () => {
+  it('should include tool instructions for ADMIN', () => {
     const prompt = buildSystemPrompt('admin-group', TrustLevel.ADMIN, 'Bob');
-    expect(prompt).toContain('ADMIN');
+    expect(prompt).toContain('18 local tools');
+    expect(prompt).toContain('run_applescript');
+    expect(prompt).toContain('web_search');
+    expect(prompt).toContain('remember');
+    expect(prompt).toContain('ask_confirmation');
   });
 
-  it('should include output marker instructions', () => {
+  it('should be conversational-only for non-ADMIN', () => {
     const prompt = buildSystemPrompt('g', TrustLevel.TRUSTED, 's');
-    expect(prompt).toContain('SECURECLAW_OUTPUT_START');
-    expect(prompt).toContain('SECURECLAW_OUTPUT_END');
+    expect(prompt).toContain('conversational assistant');
+    expect(prompt).not.toContain('18 local tools');
+  });
+
+  it('should include role persistence instructions', () => {
+    const prompt = buildSystemPrompt('g', TrustLevel.TRUSTED, 's');
+    expect(prompt).toContain('save_memory');
+    expect(prompt).toContain('role/persona');
   });
 });
 

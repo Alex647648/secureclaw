@@ -106,6 +106,29 @@ CREATE TABLE IF NOT EXISTS sc_app_state (
   value TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS sc_agent_memory (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  tags TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE(group_id, key)
+);
+CREATE INDEX IF NOT EXISTS idx_sc_memory_group ON sc_agent_memory(group_id);
+
+CREATE TABLE IF NOT EXISTS sc_pending_confirmations (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  question TEXT NOT NULL,
+  context TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sc_pending_group_sender ON sc_pending_confirmations(group_id, sender_id);
 `;
 
 // ── 数据库类 ────────────────────────────────────────────────────
@@ -394,6 +417,64 @@ export class SecureClawDB {
       prevHash: row.prev_hash,
       entryHash: row.entry_hash,
     }));
+  }
+
+  // ── Agent Memory（结构化长期记忆）───────────────────────────
+
+  saveMemoryEntry(groupId: string, key: string, value: string, tags: string = ''): void {
+    const now = Date.now();
+    const id = `${groupId}:${key}`;
+    this.db.prepare(
+      `INSERT INTO sc_agent_memory (id, group_id, key, value, tags, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(group_id, key) DO UPDATE SET value = ?, tags = ?, updated_at = ?`
+    ).run(id, groupId, key, value, tags, now, now, value, tags, now);
+  }
+
+  searchMemory(groupId: string, query: string): Array<{ key: string; value: string; tags: string; updated_at: number }> {
+    const pattern = `%${query}%`;
+    return this.db.prepare(
+      `SELECT key, value, tags, updated_at FROM sc_agent_memory
+       WHERE group_id = ? AND (key LIKE ? OR value LIKE ? OR tags LIKE ?)
+       ORDER BY updated_at DESC LIMIT 20`
+    ).all(groupId, pattern, pattern, pattern) as Array<{ key: string; value: string; tags: string; updated_at: number }>;
+  }
+
+  deleteMemoryEntry(groupId: string, key: string): boolean {
+    const result = this.db.prepare(
+      'DELETE FROM sc_agent_memory WHERE group_id = ? AND key = ?'
+    ).run(groupId, key);
+    return result.changes > 0;
+  }
+
+  listMemory(groupId: string): Array<{ key: string; value: string; tags: string; updated_at: number }> {
+    return this.db.prepare(
+      'SELECT key, value, tags, updated_at FROM sc_agent_memory WHERE group_id = ? ORDER BY updated_at DESC LIMIT 50'
+    ).all(groupId) as Array<{ key: string; value: string; tags: string; updated_at: number }>;
+  }
+
+  // ── Pending Confirmations（确认式交互）─────────────────────
+
+  createPendingConfirmation(id: string, groupId: string, senderId: string, question: string, context: string, ttlMs: number = 300_000): void {
+    const now = Date.now();
+    this.db.prepare(
+      `INSERT INTO sc_pending_confirmations (id, group_id, sender_id, question, context, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(id, groupId, senderId, question, context, now, now + ttlMs);
+  }
+
+  getPendingConfirmation(groupId: string, senderId: string): { id: string; question: string; context: string } | null {
+    const now = Date.now();
+    // 清理过期确认
+    this.db.prepare('DELETE FROM sc_pending_confirmations WHERE expires_at < ?').run(now);
+    const row = this.db.prepare(
+      'SELECT id, question, context FROM sc_pending_confirmations WHERE group_id = ? AND sender_id = ? ORDER BY created_at DESC LIMIT 1'
+    ).get(groupId, senderId) as { id: string; question: string; context: string } | undefined;
+    return row ?? null;
+  }
+
+  deletePendingConfirmation(id: string): void {
+    this.db.prepare('DELETE FROM sc_pending_confirmations WHERE id = ?').run(id);
   }
 
   // ── Bootstrap ───────────────────────────────────────────────
