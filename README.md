@@ -34,6 +34,7 @@
 
 - [What is SecureClaw](#what-is-secureclaw)
 - [Why SecureClaw](#why-secureclaw)
+- [Comparison with Other Projects](#comparison-with-other-projects)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
 - [Detailed installation](#detailed-installation)
@@ -61,6 +62,40 @@ SecureClaw is an **enterprise AI agent security framework**. It receives message
 | **Zero trust by default** | New users are untrusted until an admin promotes them; capabilities and network policy follow trust level. |
 | **Enterprise audit** | Built-in audit log and HMAC hash chain; network policies (no network / Claude API only / open) are built in. |
 | **Clear scope** | Four channels + Claude only; simple stack for security review and compliance. |
+
+## Comparison with Other Projects
+
+The "Claw" ecosystem has grown rapidly. Here is how SecureClaw compares with other major frameworks:
+
+| | **SecureClaw** | **OpenClaw** | **NanoClaw** | **ZeroClaw** |
+|---|---|---|---|---|
+| **Positioning** | Enterprise security framework | Personal AI assistant gateway | Lightweight container-first agent | Minimal Rust runtime |
+| **Language** | TypeScript | TypeScript | TypeScript | Rust |
+| **Security model** | 6-layer pipeline (Ingress → Trust → Router → Execution → Memory → Audit) | DM policy gate, per-session sandbox | Container-level isolation only | Trait-based sandbox controls |
+| **Trust model** | Multi-tenant, per-sender trust levels (BLOCKED → UNTRUSTED → TRUSTED → ADMIN) | Single-operator (one trusted user, many agents) | No built-in trust scoring | Allowlists |
+| **Credential isolation** | API keys **never enter containers**; Unix socket proxy with 256-bit session tokens, 3 req/session limit | Keys passed via environment variables | Keys mounted or passed in | Encrypted secrets store |
+| **Injection defense** | 13 heuristic rules, 0.0–1.0 scoring, configurable threshold | No built-in injection guard | No built-in injection guard | No built-in injection guard |
+| **Audit trail** | Append-only SQLite + HMAC hash-chain (tamper-evident) | Basic logging | No audit chain | Observability hooks |
+| **Network policy** | 4 presets: `isolated` / `claude_only` / `trusted` / `open` | Per-session sandbox policy | Container network defaults | Sandbox controls |
+| **Channels** | WhatsApp, Telegram, Slack, Discord | 25+ channels | WhatsApp, Telegram, Slack, Discord, Gmail | 15+ channels |
+| **Container runtime** | Docker + Apple Container | Docker | Docker + Apple Container | Built-in sandbox |
+| **Rate limiting** | Per-sender, configurable | No built-in rate limiter | No built-in rate limiter | No built-in rate limiter |
+| **Codebase size** | ~12K lines, 558 tests | Large (full gateway) | ~3,900 lines | Single binary (8.8 MB) |
+| **Best for** | Teams needing security, compliance, and auditability | Personal power users wanting maximum channel coverage | Developers wanting a minimal, hackable agent | Performance-critical deployments |
+
+### Key advantages of SecureClaw
+
+1. **Security is the architecture, not an add-on.** Every message passes through six layers before an agent sees it. Other frameworks treat security as optional configuration — SecureClaw makes it the default.
+
+2. **API keys never touch the container.** The credential proxy distributes short-lived session tokens over a Unix socket. Even if the container is compromised, the attacker cannot extract the raw API key. No other Claw framework implements this level of credential isolation.
+
+3. **Tamper-evident audit trail.** The HMAC hash-chain means any deleted or modified log entry breaks the chain. This matters for regulated industries and compliance requirements.
+
+4. **Multi-tenant trust engine.** OpenClaw assumes a single trusted operator. SecureClaw supports multiple users at different trust levels in the same group, with capabilities and network policies tied to each level.
+
+5. **Prompt injection defense built in.** 13 heuristic rules score every inbound message before it reaches the agent. Configurable threshold allows tuning the sensitivity for your use case.
+
+6. **Production-ready from day one.** Health endpoint, structured logging (pino), metrics counters, system service installers (launchd / systemd), and 558 tests are included out of the box.
 
 ## Prerequisites
 
