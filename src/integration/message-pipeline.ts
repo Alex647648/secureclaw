@@ -168,6 +168,22 @@ export function createMessagePipeline(
           timestamp: normalized.timestamp,
         });
 
+        // Step 4.5: 记录用户对话轮次（多轮上下文）
+        try {
+          db.insertTurn({
+            id: `turn-${normalized.id}`,
+            group_id: group.id,
+            sender_id: normalized.senderId,
+            sender_name: normalized.senderName,
+            role: 'user',
+            content: normalized.content,
+            timestamp: normalized.timestamp,
+            source_message_id: normalized.id,
+          });
+        } catch {
+          // 对话轮次写入失败不影响主流程
+        }
+
         // Step 5: 信任评估
         const trusted: TrustedMessage = await evaluate(normalized, db, audit);
 

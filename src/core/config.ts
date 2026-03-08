@@ -56,6 +56,10 @@ export interface AppConfig {
     level: 'debug' | 'info' | 'warn' | 'error';
     prettyPrint: boolean;
   };
+  conversation: {
+    maxTurns: number;
+    windowMs: number;
+  };
   anthropicApiKey: string;
 }
 
@@ -106,6 +110,10 @@ const configSchema = z.object({
   }).default({}),
   db: z.object({
     path: z.string().default('scdata/secureclaw.db'),
+  }).default({}),
+  conversation: z.object({
+    max_turns: z.number().int().positive().default(10),
+    window_ms: z.number().int().positive().default(3600_000), // 1 小时
   }).default({}),
   logging: z.object({
     level: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
@@ -229,6 +237,10 @@ export function loadConfig(configPath?: string): AppConfig {
     log: {
       level: parsed.logging.level,
       prettyPrint: process.env.NODE_ENV !== 'production',
+    },
+    conversation: {
+      maxTurns: parsed.conversation.max_turns,
+      windowMs: parsed.conversation.window_ms,
     },
     anthropicApiKey,
   };

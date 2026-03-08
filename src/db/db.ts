@@ -14,6 +14,8 @@ import {
   type NewScheduledTask,
   type AuditEntry,
   type AuditFilter,
+  type ConversationTurn,
+  type NewConversationTurn,
   TrustLevel,
   SAFE_ID_PATTERN,
 } from '../core/types';
@@ -129,6 +131,19 @@ CREATE TABLE IF NOT EXISTS sc_pending_confirmations (
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sc_pending_group_sender ON sc_pending_confirmations(group_id, sender_id);
+
+CREATE TABLE IF NOT EXISTS sc_conversation_turns (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  sender_name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+  content TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  source_message_id TEXT NOT NULL,
+  FOREIGN KEY (group_id) REFERENCES sc_groups(id)
+);
+CREATE INDEX IF NOT EXISTS idx_sc_turns_group_ts ON sc_conversation_turns(group_id, timestamp);
 `;
 
 // ── 数据库类 ────────────────────────────────────────────────────
@@ -475,6 +490,33 @@ export class SecureClawDB {
 
   deletePendingConfirmation(id: string): void {
     this.db.prepare('DELETE FROM sc_pending_confirmations WHERE id = ?').run(id);
+  }
+
+  // ── Conversation Turns（多轮对话上下文）─────────────────────
+
+  /**
+   * 插入一条对话轮次（用户消息或助手回复）。
+   */
+  insertTurn(turn: NewConversationTurn): void {
+    this.db.prepare(
+      `INSERT INTO sc_conversation_turns (id, group_id, sender_id, sender_name, role, content, timestamp, source_message_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(turn.id, turn.group_id, turn.sender_id, turn.sender_name, turn.role, turn.content, turn.timestamp, turn.source_message_id);
+  }
+
+  /**
+   * 获取指定 group 在 since 时间戳之后的最近 N 条对话轮次。
+   * 返回按时间正序排列（最旧在前）。
+   */
+  getRecentTurns(groupId: string, since: number, limit: number): ConversationTurn[] {
+    // 先按 timestamp DESC 取最新 N 条，再在内存中反转为正序
+    const rows = this.db.prepare(
+      `SELECT * FROM sc_conversation_turns
+       WHERE group_id = ? AND timestamp >= ?
+       ORDER BY timestamp DESC
+       LIMIT ?`
+    ).all(groupId, since, limit) as ConversationTurn[];
+    return rows.reverse();
   }
 
   // ── Bootstrap ───────────────────────────────────────────────

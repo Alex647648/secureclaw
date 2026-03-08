@@ -12,6 +12,7 @@ import { validateMounts } from '../security/mount-controller';
 import { createSessionDir, cleanSessionDir } from '../memory/session-memory';
 import { generateId } from '../core/utils';
 import type { HostBackendWithProgress } from '../execution/host-backend';
+import type { NewConversationTurn } from '../core/types';
 
 // ── 配置 ───────────────────────────────────────────────────────
 
@@ -168,6 +169,22 @@ export function createSessionRunner(
             replyToId: task.sourceMessageId,
             channelType: group?.channel_type ?? 'unknown',
           });
+
+          // Step 7.5: 记录助手对话轮次（多轮上下文）
+          try {
+            db.insertTurn({
+              id: `turn-${task.taskId}`,
+              group_id: task.groupId,
+              sender_id: 'assistant',
+              sender_name: 'assistant',
+              role: 'assistant',
+              content: content.length > 2000 ? content.slice(0, 2000) + '...' : content,
+              timestamp: Date.now(),
+              source_message_id: task.taskId,
+            });
+          } catch {
+            // 对话轮次写入失败不影响主流程
+          }
         }
       }
 

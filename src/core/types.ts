@@ -291,6 +291,21 @@ export type NewScheduledTask = Omit<ScheduledTask, 'last_run_at'> & {
   last_run_at?: number | null;
 };
 
+// ── 对话轮次（多轮上下文）──────────────────────────────────────
+
+export interface ConversationTurn {
+  id: string;
+  group_id: string;
+  sender_id: string;         // 用户 sender_id 或 'assistant'
+  sender_name: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  source_message_id: string; // 关联 sc_messages.id 或 task_id
+}
+
+export type NewConversationTurn = ConversationTurn;
+
 // ── 能力合并工具（per-group 覆盖用）─────────────────────────────
 
 /**

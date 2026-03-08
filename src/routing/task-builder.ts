@@ -6,6 +6,7 @@ import {
   type TrustedMessage,
   type AgentTask,
   type Message,
+  type ConversationTurn,
   NETWORK_POLICY_PRESETS,
   CAPABILITY_PRESETS,
   SAFE_ID_PATTERN,
@@ -83,6 +84,30 @@ function buildSystemPrompt(
 
 // ── 历史上下文构建 ─────────────────────────────────────────────
 
+/**
+ * 从对话轮次构建多轮上下文（包含 user + assistant 双方消息）。
+ * 每条内容截断为 500 字符以控制 token 消耗。
+ */
+function buildConversationContext(
+  turns: ConversationTurn[],
+  maxTurns: number,
+): string {
+  if (turns.length === 0) return '';
+
+  const recent = turns.slice(-maxTurns);
+  const lines = recent.map(t => {
+    const label = t.role === 'assistant' ? '[Assistant]' : `[${t.sender_name || t.sender_id}]`;
+    const truncated = t.content.length > 500 ? t.content.slice(0, 500) + '...' : t.content;
+    return `${label}: ${truncated}`;
+  });
+
+  return `\n--- Recent conversation ---\n${lines.join('\n')}\n--- End conversation ---\n`;
+}
+
+/**
+ * 旧版：仅从 sc_messages 构建（不含助手回复）。
+ * 保留为回退路径和定时任务使用。
+ */
 function buildHistoryContext(
   messages: Message[],
   maxMessages: number,
@@ -145,10 +170,12 @@ export class TaskBuilder {
     // 加载记忆
     const memoryContext = loadGroupMemory(this.config.projectRoot, msg.groupId);
 
-    // 加载历史消息
+    // 加载多轮对话上下文（优先使用 conversation turns，含 user + assistant）
     const since = msg.timestamp - this.config.historyWindowMs;
-    const historyMessages = db.getMessagesSince(msg.groupId, since);
-    const historyContext = buildHistoryContext(historyMessages, this.config.maxHistoryMessages);
+    const turns = db.getRecentTurns(msg.groupId, since, this.config.maxHistoryMessages);
+    const historyContext = turns.length > 0
+      ? buildConversationContext(turns, this.config.maxHistoryMessages)
+      : buildHistoryContext(db.getMessagesSince(msg.groupId, since), this.config.maxHistoryMessages);
 
     const fullPrompt = [
       systemPrompt,
@@ -214,4 +241,4 @@ export class TaskBuilder {
 }
 
 /** 导出辅助函数（测试用） */
-export { buildSystemPrompt, buildHistoryContext, loadGroupMemory };
+export { buildSystemPrompt, buildHistoryContext, buildConversationContext, loadGroupMemory };
